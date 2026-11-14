@@ -1,0 +1,21 @@
+review_id,review_title,review_text,overall_rating
+rev_001,Excelente produto,Adorei o produto funcionou perfeitamente e chegou rapido,5
+rev_002,Pessimo atendimento,Nao gostei do produto veio com defeito e nao recomendo,1
+rev_003,Mais ou menos,O produto e razoavel atende basico mas nao compraria novamente,3
+rev_004,Muito bom,Chegou antes do prazo e a qualidade e muito boa,4
+rev_005,Horrivel,Veio quebrado e a loja nao respondeu meu contato,1
+rev_006,,Gostei bastante do acabamento recomendo a todos,5
+rev_007,Nao funcionou,O aparelho nao liga de jeito nenhum pessimo,1
+rev_008,Satisfeito,Cumpre o que promete bom custo beneficio,4
+rev_009,Produto medio,Entrega rapida mas o material e fragil,3
+rev_010,Maravilhoso,Superou minhas expectativas comprarei de novo,5
+rev_011,Nao comprem,Propaganda enganosa nao condiz com a foto,1
+rev_012,Boa compra,Produto de boa qualidade recomendo,4
+rev_013,Excelente produto,Adorei o produto funcionou perfeitamente e chegou rapido,5
+rev_014,Excelente produto,Adorei o produto funcionou perfeitamente e chegou rapido,1
+rev_015,Ruim,Nao gostei da cor e o tamanho e pequeno demais,2
+rev_016,Otimo,Muito bom e rapido,5
+rev_017,Defeituoso,Parou de funcionar no segundo dia,2
+rev_018,Adorei,Produto lindo e muito pratico,5
+rev_019,,Pessima qualidade nao comprem,1
+rev_020,Recomendo,Muito facil de usar e bateria dura muito,4

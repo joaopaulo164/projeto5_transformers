@@ -1,0 +1,78 @@
+# Full Configuration for Expanded Scientific Experiment
+# 20,000 balanced reviews (10,000 negative, 10,000 positive) or full dataset
+
+project:
+  name: "sentiment_transformer_full"
+  seed: 42
+
+dataset:
+  source_url: "https://raw.githubusercontent.com/b2wads/b2w-reviews01/master/B2W-Reviews01.csv"
+  raw_file_name: "B2W-Reviews01.csv"
+  raw_dir: "data/raw"
+  interim_dir: "data/interim"
+  processed_dir: "data/processed"
+  timeout_seconds: 90
+  min_file_size_bytes: 10485760
+  column_candidates:
+    id: ["review_id", "id", "submission_date"]
+    title: ["review_title", "title", "titulo", "review_header"]
+    text: ["review_text", "text", "texto", "review_body", "review_comment_message"]
+    rating: ["overall_rating", "rating", "nota", "review_score", "stars", "pontuacao"]
+  label_mapping:
+    negative_ratings: [1, 2]
+    excluded_ratings: [3]
+    positive_ratings: [4, 5]
+
+sampling:
+  enabled: true
+  total_samples: 20000
+  samples_per_class: 10000
+  balance_classes: true
+  seed: 42
+
+split:
+  train_ratio: 0.70
+  val_ratio: 0.15
+  test_ratio: 0.15
+  seed: 42
+  save_parquet: false
+
+baseline_majority:
+  strategy: "most_frequent"
+
+baseline_tfidf:
+  ngram_range: [1, 2]
+  max_features: 20000
+  min_df: 2
+  max_df: 0.95
+  c_regularization: 1.0
+  max_iter: 1000
+  random_state: 42
+
+transformer:
+  model_checkpoint: "neuralmind/bert-base-portuguese-cased"
+  max_length: 128
+  num_labels: 2
+  epochs: 3
+  batch_size: 16
+  eval_batch_size: 32
+  learning_rate: 0.00002
+  weight_decay: 0.01
+  warmup_ratio: 0.1
+  gradient_accumulation_steps: 2
+  fp16: true
+  early_stopping_patience: 2
+  metric_for_best_model: "f1_macro"
+  greater_is_better: true
+  seed: 42
+
+device:
+  use_cuda_if_available: true
+  device_id: 0
+
+logging:
+  level: "INFO"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+
+artifacts:
+  output_dir: "artifacts/runs"
