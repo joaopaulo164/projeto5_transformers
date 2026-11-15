@@ -82,3 +82,13 @@ python -m sentiment_transformer.cli run --config configs/full.yaml
 ```powershell
 python scripts/run_experiment.py --config configs/default.yaml
 ```
+
+---
+
+## 4. Monitoramento e Logs em Tempo Real
+
+Durante a execução do treinamento, validação e inferência do Transformer, o pipeline emite mensagens periódicas com métricas dinâmicas para acompanhamento contínuo (inclusive em execuções longas em CPU):
+
+- **Treinamento**: Progresso percentual por época, passos concluídos, perda média acumulada (*running loss*), taxa de aprendizado atual (*learning rate*), velocidade (*samples/s*), tempo decorrido e estimativa de tempo restante (*ETA*).
+- **Validação**: Progresso em lote com percentual a cada intervalo.
+- **Inferência**: Acompanhamento por lote, contagem de amostras processadas, taxa de throughput e tempo decorrido.

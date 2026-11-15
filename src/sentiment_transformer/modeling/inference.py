@@ -45,13 +45,6 @@ def predict_transformer(
     if len(texts) == 0:
         return np.empty((0, 2)), np.empty(0, dtype=int), 0.0
 
-    logger.info(
-        "Running Transformer inference on %d samples (batch_size=%d, max_length=%d)...",
-        len(texts),
-        batch_size,
-        max_length,
-    )
-
     dataset = ReviewSentimentDataset(
         texts=texts,
         labels=None,
@@ -59,16 +52,28 @@ def predict_transformer(
         max_length=max_length,
     )
     data_loader = DataLoader(dataset, batch_size=batch_size, shuffle=False)
+    total_batches = len(data_loader)
+    inf_log_interval = max(1, min(25, total_batches // 4))
+
+    logger.info(
+        "Running Transformer inference on %d samples (%d batches, batch_size=%d, max_length=%d)...",
+        len(texts),
+        total_batches,
+        batch_size,
+        max_length,
+    )
 
     model.eval()
     model.to(device)  # type: ignore[arg-type]
 
     all_probabilities: list[np.ndarray] = []
     start_time = time.time()
+    last_log_time = start_time
+    samples_done = 0
 
     try:
         with torch.no_grad():
-            for batch in data_loader:
+            for step, batch in enumerate(data_loader):
                 input_ids = batch["input_ids"].to(device)
                 attention_mask = batch["attention_mask"].to(device)
                 token_type_ids = batch.get("token_type_ids")
@@ -84,6 +89,30 @@ def predict_transformer(
                 logits = outputs.logits
                 probs = F.softmax(logits, dim=-1).cpu().numpy()
                 all_probabilities.append(probs)
+
+                batch_len = len(input_ids)
+                samples_done += batch_len
+                now = time.time()
+                is_last_step = (step + 1) == total_batches
+
+                if (
+                    ((step + 1) % inf_log_interval == 0)
+                    or (now - last_log_time >= 20.0)
+                    or is_last_step
+                ):
+                    elapsed = now - start_time
+                    speed = samples_done / max(0.001, elapsed)
+                    logger.info(
+                        "  [Inference] Batch %d/%d (%.1f%%) | %d/%d samples | Speed: %.1f samples/s | Elapsed: %.1fs",
+                        step + 1,
+                        total_batches,
+                        ((step + 1) / total_batches) * 100,
+                        samples_done,
+                        len(texts),
+                        speed,
+                        elapsed,
+                    )
+                    last_log_time = now
 
         duration = time.time() - start_time
         probabilities = np.vstack(all_probabilities)

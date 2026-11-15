@@ -27,6 +27,19 @@ from sentiment_transformer.modeling.device import get_device
 logger = logging.getLogger(__name__)
 
 
+def _format_duration(seconds: float) -> str:
+    """Format duration in seconds into a human-readable string (e.g. '1h 05m 20s', '4m 12s', '35s')."""
+    seconds = max(0.0, float(seconds))
+    hrs = int(seconds // 3600)
+    mins = int((seconds % 3600) // 60)
+    secs = int(seconds % 60)
+    if hrs > 0:
+        return f"{hrs}h {mins:02d}m {secs:02d}s"
+    if mins > 0:
+        return f"{mins}m {secs:02d}s"
+    return f"{secs}s"
+
+
 class TransformerTrainer:
     """Trainer handling fine-tuning, validation, early stopping, and checkpointing for Transformers."""
 
@@ -94,8 +107,11 @@ class TransformerTrainer:
         all_preds: list[int] = []
         all_labels: list[int] = []
 
+        total_val_batches = len(val_loader)
+        eval_log_interval = max(1, min(25, total_val_batches // 4))
+
         with torch.no_grad():
-            for batch in val_loader:
+            for val_step, batch in enumerate(val_loader):
                 input_ids = batch["input_ids"].to(self.device)
                 attention_mask = batch["attention_mask"].to(self.device)
                 labels = batch["labels"].to(self.device)
@@ -119,6 +135,14 @@ class TransformerTrainer:
                 preds = torch.argmax(logits, dim=-1).cpu().numpy()
                 all_preds.extend(preds)
                 all_labels.extend(labels.cpu().numpy())
+
+                if (val_step + 1) % eval_log_interval == 0 or (val_step + 1) == total_val_batches:
+                    logger.info(
+                        "  [Validation] Batch %d/%d (%.1f%%)",
+                        val_step + 1,
+                        total_val_batches,
+                        ((val_step + 1) / total_val_batches) * 100,
+                    )
 
         num_samples = len(all_labels)
         avg_loss = total_loss / num_samples if num_samples > 0 else 0.0
@@ -257,11 +281,24 @@ class TransformerTrainer:
         epochs_without_improvement = 0
         start_time = time.time()
 
+        total_batches = len(train_loader)
+        log_interval = max(1, min(50, total_batches // 10))
+
         for epoch in range(1, epochs + 1):
             epoch_start = time.time()
+            last_log_time = epoch_start
             self.model.train()
             train_loss_total = 0.0
+            samples_processed = 0
             optimizer.zero_grad()
+
+            logger.info(
+                "--- Starting Epoch %d/%d (%d training batches, %d samples) ---",
+                epoch,
+                epochs,
+                total_batches,
+                len(train_dataset),
+            )
 
             for step, batch in enumerate(train_loader):
                 input_ids = batch["input_ids"].to(self.device)
@@ -271,6 +308,7 @@ class TransformerTrainer:
                 if token_type_ids is not None:
                     token_type_ids = token_type_ids.to(self.device)
 
+                batch_samples = len(labels)
                 kwargs: dict[str, Any] = {
                     "input_ids": input_ids,
                     "attention_mask": attention_mask,
@@ -282,18 +320,20 @@ class TransformerTrainer:
                 if use_fp16 and scaler is not None:
                     with torch.amp.autocast("cuda"):
                         outputs = self.model(**kwargs)
-                        loss = outputs.loss / grad_accum
+                        raw_loss = outputs.loss
+                        loss = raw_loss / grad_accum
                     scaler.scale(loss).backward()
-                    if (step + 1) % grad_accum == 0 or (step + 1) == len(train_loader):
+                    if (step + 1) % grad_accum == 0 or (step + 1) == total_batches:
                         scaler.step(optimizer)
                         scaler.update()
                         optimizer.zero_grad()
                         scheduler.step()
                 else:
                     outputs = self.model(**kwargs)
-                    loss = outputs.loss / grad_accum
+                    raw_loss = outputs.loss
+                    loss = raw_loss / grad_accum
                     loss.backward()
-                    if (step + 1) % grad_accum == 0 or (step + 1) == len(train_loader):
+                    if (step + 1) % grad_accum == 0 or (step + 1) == total_batches:
                         torch.nn.utils.clip_grad_norm_(
                             self.model.parameters(), max_norm=1.0
                         )
@@ -301,13 +341,54 @@ class TransformerTrainer:
                         optimizer.zero_grad()
                         scheduler.step()
 
-                train_loss_total += (loss.item() * grad_accum) * len(labels)
+                loss_val = raw_loss.item()
+                train_loss_total += loss_val * batch_samples
+                samples_processed += batch_samples
+
+                now = time.time()
+                is_last_step = (step + 1) == total_batches
+                should_log = (
+                    ((step + 1) % log_interval == 0)
+                    or (now - last_log_time >= 30.0)
+                    or is_last_step
+                )
+
+                if should_log:
+                    elapsed = now - epoch_start
+                    speed = samples_processed / max(0.001, elapsed)
+                    avg_running_loss = train_loss_total / max(1, samples_processed)
+                    batches_remaining = total_batches - (step + 1)
+                    avg_time_per_batch = elapsed / (step + 1)
+                    eta_epoch = batches_remaining * avg_time_per_batch
+                    current_lr = scheduler.get_last_lr()[0] if scheduler.get_last_lr() else lr
+
+                    logger.info(
+                        "  [Epoch %d/%d] Step %d/%d (%.1f%%) | Loss: %.4f (batch: %.4f) | LR: %.2e | Speed: %.1f samples/s | Elapsed: %s | ETA: %s",
+                        epoch,
+                        epochs,
+                        step + 1,
+                        total_batches,
+                        ((step + 1) / total_batches) * 100,
+                        avg_running_loss,
+                        loss_val,
+                        current_lr,
+                        speed,
+                        _format_duration(elapsed),
+                        _format_duration(eta_epoch),
+                    )
+                    last_log_time = now
 
             avg_train_loss = (
                 train_loss_total / len(train_dataset) if len(train_dataset) > 0 else 0.0
             )
 
             # Validation step
+            logger.info(
+                "--- Starting Validation for Epoch %d/%d (%d validation samples) ---",
+                epoch,
+                epochs,
+                len(val_dataset),
+            )
             val_metrics = self.evaluate(val_loader)
             epoch_duration = time.time() - epoch_start
 
