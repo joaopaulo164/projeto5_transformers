@@ -36,7 +36,16 @@ def download_dataset(
     """
     raw_dir = ensure_dir(resolve_path(config.dataset.raw_dir))
     target_path = raw_dir / config.dataset.raw_file_name
-    url = config.dataset.source_url
+    urls_to_try = [config.dataset.source_url]
+    known_mirrors = [
+        "https://raw.githubusercontent.com/americanas-tech/b2w-reviews01/master/B2W-Reviews01.csv",
+        "https://raw.githubusercontent.com/americanas-tech/b2w-reviews01/main/B2W-Reviews01.csv",
+        "https://raw.githubusercontent.com/b2wdigital/b2w-reviews01/master/B2W-Reviews01.csv",
+    ]
+    for mirror in known_mirrors:
+        if mirror not in urls_to_try:
+            urls_to_try.append(mirror)
+
     timeout = config.dataset.timeout_seconds
     min_size = config.dataset.min_file_size_bytes
 
@@ -63,80 +72,94 @@ def download_dataset(
                 min_size,
             )
 
-    logger.info("Initiating download from: %s", url)
     logger.info("Destination path: %s", target_path)
 
-    temp_fd = None
-    temp_path = None
-    try:
-        response = requests.get(url, stream=True, timeout=timeout)
-        if response.status_code != 200:
-            raise DataDownloadError(
-                f"Download failed with HTTP status {response.status_code} for URL: {url}\n"
-                f"Manual fallback: Please download '{config.dataset.raw_file_name}' manually and "
-                f"place it at '{target_path}'.",
-                details={"status_code": response.status_code, "url": url},
-            )
+    last_error: Exception | None = None
+    temp_path: Path | None = None
 
-        with tempfile.NamedTemporaryFile(
-            delete=False, dir=raw_dir, suffix=".tmp"
-        ) as tmp_file:
-            temp_path = Path(tmp_file.name)
-            for chunk in response.iter_content(chunk_size=65536):
-                if chunk:
-                    tmp_file.write(chunk)
+    for url in urls_to_try:
+        logger.info("Attempting download from: %s", url)
+        try:
+            response = requests.get(url, stream=True, timeout=timeout)
+            if response.status_code != 200:
+                logger.warning("HTTP %d received from %s", response.status_code, url)
+                last_error = DataDownloadError(
+                    f"Download failed with HTTP status {response.status_code} for URL: {url}",
+                    details={"status_code": response.status_code, "url": url},
+                )
+                continue
 
-        # Validate downloaded temp file
-        downloaded_size = temp_path.stat().st_size
-        if downloaded_size < min_size:
-            # Check if content is HTML error page
-            with open(temp_path, "rb") as f:
-                head = f.read(1024).lower()
-                if b"<html" in head or b"<!doctype html" in head:
-                    raise DataDownloadError(
-                        f"Downloaded content from {url} is HTML rather than CSV data.\n"
-                        f"Manual fallback: Download '{config.dataset.raw_file_name}' manually and "
-                        f"place it at '{target_path}'.",
+            with tempfile.NamedTemporaryFile(
+                delete=False, dir=raw_dir, suffix=".tmp"
+            ) as tmp_file:
+                temp_path = Path(tmp_file.name)
+                for chunk in response.iter_content(chunk_size=65536):
+                    if chunk:
+                        tmp_file.write(chunk)
+
+            # Validate downloaded temp file
+            downloaded_size = temp_path.stat().st_size
+            if downloaded_size < min_size:
+                is_html = False
+                with open(temp_path, "rb") as f:
+                    head = f.read(1024).lower()
+                    if b"<html" in head or b"<!doctype html" in head:
+                        is_html = True
+
+                if temp_path.exists():
+                    try:
+                        temp_path.unlink()
+                    except OSError:
+                        pass
+                temp_path = None
+
+                if is_html:
+                    logger.warning("Downloaded content from %s is HTML.", url)
+                    last_error = DataDownloadError(
+                        f"Downloaded content from {url} is HTML rather than CSV data.",
                         details={"content_type": "html", "size_bytes": downloaded_size},
                     )
+                else:
+                    last_error = DataDownloadError(
+                        f"Downloaded file from {url} is smaller than required minimum: {downloaded_size} < {min_size} bytes.",
+                        details={"size_bytes": downloaded_size, "min_size": min_size},
+                    )
+                continue
 
-            raise DataDownloadError(
-                f"Downloaded file is smaller than required minimum: {downloaded_size} < {min_size} bytes.\n"
-                f"Manual fallback: Download '{config.dataset.raw_file_name}' manually and "
-                f"place it at '{target_path}'.",
-                details={"size_bytes": downloaded_size, "min_size": min_size},
+            # Atomic move/replace
+            shutil.move(str(temp_path), str(target_path))
+            temp_path = None
+
+            sha256 = calculate_sha256(target_path)
+            final_size = target_path.stat().st_size
+            logger.info(
+                "Download completed successfully. Path: %s | Size: %d bytes | SHA-256: %s",
+                target_path,
+                final_size,
+                sha256,
             )
 
-        # Atomic move/replace
-        shutil.move(str(temp_path), str(target_path))
-        temp_path = None
+            return {
+                "file_path": str(target_path),
+                "size_bytes": final_size,
+                "sha256": sha256,
+                "downloaded": True,
+            }
 
-        sha256 = calculate_sha256(target_path)
-        final_size = target_path.stat().st_size
-        logger.info(
-            "Download completed successfully. Path: %s | Size: %d bytes | SHA-256: %s",
-            target_path,
-            final_size,
-            sha256,
-        )
+        except requests.RequestException as e:
+            logger.warning("Network error attempting %s: %s", url, e)
+            last_error = e
+        finally:
+            if temp_path is not None and temp_path.exists():
+                try:
+                    temp_path.unlink()
+                except OSError:
+                    pass
+                temp_path = None
 
-        return {
-            "file_path": str(target_path),
-            "size_bytes": final_size,
-            "sha256": sha256,
-            "downloaded": True,
-        }
-
-    except requests.RequestException as e:
-        raise DataDownloadError(
-            f"Network error while downloading dataset from {url}: {e}\n"
-            f"Manual fallback: Please download '{config.dataset.raw_file_name}' manually and "
-            f"place it at '{target_path}'.",
-            details={"error": str(e), "url": url},
-        ) from e
-    finally:
-        if temp_path is not None and temp_path.exists():
-            try:
-                temp_path.unlink()
-            except OSError:
-                pass
+    raise DataDownloadError(
+        f"All download attempts failed for dataset '{config.dataset.raw_file_name}'. Last error: {last_error}\n"
+        f"Manual fallback: Please download '{config.dataset.raw_file_name}' manually and "
+        f"place it at '{target_path}'.",
+        details={"last_error": str(last_error), "urls_attempted": urls_to_try},
+    )

@@ -156,6 +156,15 @@ mypy src
 
 ---
 
-## 7. Licença
+## 7. Resolução de Problemas Comuns
+
+Consulte [`docs/troubleshooting.md`](docs/troubleshooting.md) para o guia detalhado. Destaques:
+
+- **`ModuleNotFoundError: No module named 'sentiment_transformer'`**: Ocorre quando o pacote em `src/sentiment_transformer/` não está no `sys.path` do `.venv`. Execute `pip install -e .` ou defina `$env:PYTHONPATH = "src"`.
+- **Erro 404 no download do dataset**: A organização oficial do GitHub foi atualizada de `b2wads` para `americanas-tech` (`https://raw.githubusercontent.com/americanas-tech/b2w-reviews01/master/B2W-Reviews01.csv`). O projeto já vem configurado com a URL atualizada e sistema de fallback automático.
+
+---
+
+## 8. Licença
 
 Este projeto é disponibilizado sob a licença [MIT](LICENSE).

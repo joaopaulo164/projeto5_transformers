@@ -6,7 +6,7 @@ project:
   seed: 42
 
 dataset:
-  source_url: "https://raw.githubusercontent.com/b2wads/b2w-reviews01/master/B2W-Reviews01.csv"
+  source_url: "https://raw.githubusercontent.com/americanas-tech/b2w-reviews01/master/B2W-Reviews01.csv"
   raw_file_name: "B2W-Reviews01.csv"
   raw_dir: "data/raw"
   interim_dir: "data/interim"
@@ -14,7 +14,7 @@ dataset:
   timeout_seconds: 90
   min_file_size_bytes: 10485760
   column_candidates:
-    id: ["review_id", "id", "submission_date"]
+    id: ["review_id", "id", "review_idx"]
     title: ["review_title", "title", "titulo", "review_header"]
     text: ["review_text", "text", "texto", "review_body", "review_comment_message"]
     rating: ["overall_rating", "rating", "nota", "review_score", "stars", "pontuacao"]

@@ -2,7 +2,12 @@
 """Wrapper script to audit raw dataset."""
 
 import argparse
+from pathlib import Path
 import sys
+
+_src_dir = Path(__file__).resolve().parent.parent / "src"
+if str(_src_dir) not in sys.path:
+    sys.path.insert(0, str(_src_dir))
 
 from sentiment_transformer.config import load_config
 from sentiment_transformer.data.audit import audit_dataset

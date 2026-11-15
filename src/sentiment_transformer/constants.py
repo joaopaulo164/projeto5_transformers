@@ -40,8 +40,8 @@ REQUIRED_PROCESSED_COLUMNS: Final[list[str]] = [
 CANDIDATE_ID_COLUMNS: Final[list[str]] = [
     "review_id",
     "id",
-    "submission_date",
-    "reviewer_id",
+    "review_idx",
+    "item_id",
 ]
 CANDIDATE_TITLE_COLUMNS: Final[list[str]] = [
     "review_title",

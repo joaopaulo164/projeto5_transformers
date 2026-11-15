@@ -7,7 +7,7 @@ Este documento detalha as características do dataset **B2W-Reviews01**, os proc
 ## 1. Origem e Características Gerais
 
 - **Nome**: B2W-Reviews01 (Corpus de Avaliações de Produtos de Comércio Eletrônico no Brasil)
-- **Fonte Oficial**: Repositório oficial B2W ADS no GitHub (`https://raw.githubusercontent.com/b2wads/b2w-reviews01/master/B2W-Reviews01.csv`)
+- **Fonte Oficial**: Repositório oficial Americanas Tech / B2W no GitHub (`https://raw.githubusercontent.com/americanas-tech/b2w-reviews01/master/B2W-Reviews01.csv` - a organização anterior `b2wads` foi migrada para `americanas-tech`).
 - **Idioma**: Português do Brasil (pt-BR)
 - **Escala de Avaliação**: 1 a 5 estrelas (`overall_rating`)
 
@@ -68,3 +68,4 @@ Para capturar tanto a síntese expressa no título quanto o detalhamento do corp
 2. **Resolução de Conflitos de Rótulo**: Se dois registros tiverem o mesmo texto normalizado mas notas conflitantes (uma negativa e uma positiva), o grupo inteiro é removido do experimento, eliminando ambiguidades no padrão-ouro.
 3. **Divisão Prévia à Amostragem**: A deduplicação ocorre rigorosamente antes da divisão em treino, validação e teste.
 4. **Testes de Invariantes**: O pipeline valida automaticamente que não há sobreposição de `review_id` nem de texto normalizado entre as partições de treino (70%), validação (15%) e teste (15%).
+5. **Identificadores Únicos Determinísticos**: Como o dataset bruto B2W-Reviews01 não possui uma coluna de chave primária exclusiva por avaliação (as colunas `submission_date` e `reviewer_id` podem se repetir entre avaliações distintas), o carregador gera identificadores determinísticos únicos e estáveis (`review_0000000`, `review_0000001`, ...), garantindo rastreabilidade sem colisões de IDs.

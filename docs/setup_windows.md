@@ -42,6 +42,8 @@ pip install -r requirements.txt
 pip install -e .
 ```
 
+> **Importante**: O comando `pip install -e .` instala o pacote em modo editável. Caso execute `python -m sentiment_transformer.cli` sem essa etapa, o Python gerará `ModuleNotFoundError: No module named 'sentiment_transformer'` porque o código-fonte reside em `src/sentiment_transformer/` e não está no `sys.path` do `.venv`. Alternativamente, pode-se definir `$env:PYTHONPATH = "src"`.
+
 ### 3.2 Instalação para Desenvolvimento e Testes
 ```powershell
 pip install -r requirements-dev.txt

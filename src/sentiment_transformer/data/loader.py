@@ -75,18 +75,18 @@ def load_raw_dataset(file_path: str | Path, config: AppConfig) -> pd.DataFrame:
     # Select only the needed columns or rename
     standardized = df.rename(columns=rename_dict)
 
-    # If ID was not in the original file, generate stable synthetic IDs
-    if COL_REVIEW_ID not in standardized.columns:
-        logger.info("Generating synthetic IDs as %s was not present in raw dataset.", COL_REVIEW_ID)
+    # If ID was not in the original file or is non-unique, generate stable deterministic IDs
+    if (
+        COL_REVIEW_ID not in standardized.columns
+        or standardized[COL_REVIEW_ID].fillna("").astype(str).nunique() < len(standardized)
+    ):
+        logger.info(
+            "Generating unique deterministic review IDs (%s was not uniquely present).",
+            COL_REVIEW_ID,
+        )
         standardized[COL_REVIEW_ID] = [f"review_{i:07d}" for i in range(len(standardized))]
     else:
-        # Fill any empty IDs
         standardized[COL_REVIEW_ID] = standardized[COL_REVIEW_ID].fillna("").astype(str)
-        empty_ids = standardized[COL_REVIEW_ID] == ""
-        if empty_ids.any():
-            standardized.loc[empty_ids, COL_REVIEW_ID] = [
-                f"gen_id_{i:07d}" for i in range(empty_ids.sum())
-            ]
 
     # If Title was not in the dataset, create empty string column
     if COL_REVIEW_TITLE not in standardized.columns:

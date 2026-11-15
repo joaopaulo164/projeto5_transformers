@@ -2,7 +2,12 @@
 """Wrapper script to fine-tune BERTimbau Transformer."""
 
 import argparse
+from pathlib import Path
 import sys
+
+_src_dir = Path(__file__).resolve().parent.parent / "src"
+if str(_src_dir) not in sys.path:
+    sys.path.insert(0, str(_src_dir))
 
 from sentiment_transformer.config import load_config
 from sentiment_transformer.logging_config import setup_logging
